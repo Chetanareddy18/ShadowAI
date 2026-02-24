@@ -1,0 +1,15 @@
+# Python cache
+__pycache__/
+
+# Environment variables
+.env
+
+# Virtual environments
+venv/
+ttenv/
+
+# Logs / generated files
+audit_log.json
+
+# OS / editor junk
+.ipynb_checkpoints/
