@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Shadow AI Command Center</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Unbounded:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <canvas id="bg-canvas" aria-hidden="true"></canvas>
+
+    <main class="app-shell">
+      <header class="topbar reveal">
+        <div class="brand-block">
+          <p class="kicker">Enterprise AI Governance</p>
+          <h1>Shadow AI Command Center</h1>
+        </div>
+        <div class="status-pill" id="health-pill">Checking gateway</div>
+      </header>
+
+      <section class="hero-grid">
+        <article class="hero-card reveal">
+          <h2>Secure Every Prompt Before It Leaves Your Company</h2>
+          <p>
+            This interface routes every employee prompt through your security gateway,
+            detects sensitive data, blocks prompt injections, and logs every action
+            for leadership visibility.
+          </p>
+
+          <div class="controls-grid">
+            <label>
+              Gateway URL
+              <input id="api-url" value="http://127.0.0.1:8000" />
+            </label>
+            <label>
+              API Key
+              <input id="api-key" value="shadow_emp_101" />
+            </label>
+          </div>
+        </article>
+
+        <aside class="metrics-card reveal">
+          <h3>Session Security Signals</h3>
+          <div class="metric-list">
+            <div class="metric-item">
+              <span>Total Prompts</span>
+              <strong id="metric-total">0</strong>
+            </div>
+            <div class="metric-item">
+              <span>Blocked</span>
+              <strong id="metric-blocked">0</strong>
+            </div>
+            <div class="metric-item">
+              <span>Sanitized</span>
+              <strong id="metric-sanitized">0</strong>
+            </div>
+            <div class="metric-item">
+              <span>Allowed</span>
+              <strong id="metric-allowed">0</strong>
+            </div>
+          </div>
+          <div class="pulse-wrap">
+            <div class="pulse-dot"></div>
+            <span>Threat telemetry online</span>
+          </div>
+        </aside>
+      </section>
+
+      <section class="chat-grid">
+        <article class="panel reveal">
+          <div class="panel-head">
+            <h3>Secure Prompt Studio</h3>
+            <p>Compose a prompt and run it through Shadow AI.</p>
+          </div>
+
+          <textarea
+            id="prompt-input"
+            placeholder="Example: summarize this issue. My token is sk_prod_123..."
+          ></textarea>
+
+          <div class="action-row">
+            <button id="send-btn">Analyze Prompt</button>
+            <span class="tiny-note">Shift + Enter for new line</span>
+          </div>
+        </article>
+
+        <article class="panel reveal">
+          <div class="panel-head">
+            <h3>Gateway Verdict</h3>
+            <p>Real-time decision, findings, and response.</p>
+          </div>
+
+          <div class="decision-box" id="decision-box">
+            <span class="risk-tag" id="risk-tag">Risk: --</span>
+            <h4 id="decision-title">No decision yet</h4>
+            <p id="decision-text">Run your first prompt to see security analysis.</p>
+          </div>
+
+          <div class="findings-wrap" id="findings-wrap"></div>
+        </article>
+      </section>
+
+      <section class="panel timeline reveal">
+        <div class="panel-head">
+          <h3>Live Activity Feed</h3>
+          <p>Recent prompt events in this browser session.</p>
+        </div>
+        <ul id="event-list"></ul>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,84 @@
+version: "3.9"
+
+# ──────────────────────────────────────────────────────────────────────────────
+#  Shadow AI – Full Stack (Docker Compose)
+#
+#  Services:
+#    gateway   – FastAPI security gateway (port 8000)
+#    dashboard – Streamlit analytics dashboard (port 8502)
+#    chatui    – Streamlit test chat interface (port 8501)
+#    webapp    – Static premium frontend (port 8080)
+#
+#  Usage:
+#    1. cp .env.example .env  (and fill in OPENAI_API_KEY etc.)
+#    2. docker compose up --build
+# ──────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ── FastAPI Gateway ──────────────────────────────────────────────────────────
+  gateway:
+    build: .
+    container_name: shadow_gateway
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - SHADOW_DB_URL=sqlite:////data/shadow_audit.db
+      - SHADOW_ALLOWED_ORIGINS=http://localhost:8080,http://localhost:3000
+    volumes:
+      - shadow_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ── Streamlit Dashboard ───────────────────────────────────────────────────────
+  dashboard:
+    build: .
+    container_name: shadow_dashboard
+    command: ["streamlit", "run", "dashboard.py",
+              "--server.port=8502", "--server.address=0.0.0.0",
+              "--server.headless=true"]
+    ports:
+      - "8502:8502"
+    env_file:
+      - .env
+    environment:
+      - SHADOW_DB_URL=sqlite:////data/shadow_audit.db
+    volumes:
+      - shadow_data:/data
+    depends_on:
+      - gateway
+    restart: unless-stopped
+
+  # ── Streamlit Chat UI ─────────────────────────────────────────────────────────
+  chatui:
+    build: .
+    container_name: shadow_chatui
+    command: ["streamlit", "run", "chat_ui.py",
+              "--server.port=8501", "--server.address=0.0.0.0",
+              "--server.headless=true"]
+    ports:
+      - "8501:8501"
+    env_file:
+      - .env
+    depends_on:
+      - gateway
+    restart: unless-stopped
+
+  # ── Static Web App (nginx) ────────────────────────────────────────────────────
+  webapp:
+    image: nginx:alpine
+    container_name: shadow_webapp
+    ports:
+      - "8080:80"
+    volumes:
+      - ./webapp:/usr/share/nginx/html:ro
+    restart: unless-stopped
+
+volumes:
+  shadow_data:
