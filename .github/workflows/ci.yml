@@ -29,7 +29,6 @@ jobs:
 
       # ── Install dependencies ──────────────────────────────────────────────
       - name: Install dependencies
-        working-directory: ShadowAI
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
@@ -37,13 +36,11 @@ jobs:
 
       # ── Ruff lint ─────────────────────────────────────────────────────────
       - name: Lint with ruff
-        working-directory: ShadowAI
         run: |
           ruff check . --select E,W,F --ignore E501,E402 --exclude mvenv,ttenv
 
       # ── Run tests ─────────────────────────────────────────────────────────
       - name: Run unit & integration tests
-        working-directory: ShadowAI
         env:
           SHADOW_DB_URL: sqlite:///./ci_test.db
           SHADOW_LOG_RAW_PROMPTS: "false"
@@ -58,7 +55,6 @@ jobs:
 
       # ── Gateway integration (optional, full stack) ────────────────────────
       - name: Run gateway integration tests
-        working-directory: ShadowAI
         env:
           SHADOW_DB_URL: sqlite:///./ci_gateway_test.db
           SHADOW_LOG_RAW_PROMPTS: "false"
@@ -73,7 +69,7 @@ jobs:
         if: matrix.python-version == '3.11'
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: ShadowAI/coverage.xml
+          files: coverage.xml
           flags: unittests
           fail_ci_if_error: false
 
@@ -87,7 +83,6 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build Docker image
-        working-directory: ShadowAI
         run: |
           docker build -t shadow-ai-gateway:ci .
 
