@@ -1,18 +1,22 @@
 """
 Shadow AI – Authentication
 
-Phase 1: API-key auth with org_id + role, backed by a seeded in-memory store.
-          Each key maps to a UserInfo dict that the gateway uses for decisions.
+DB-backed API-key auth with in-memory seed user fallback.
+Every request:
+  1. Hash the supplied API key with SHA-256
+  2. Look up the hash in the `users` table (DB)
+  3. Reject if the user is deactivated (is_active != "true")
+  4. Fallback to seed users list for development convenience
 
-Phase 2 (ready to drop in): replace _USER_STORE with DB queries + JWT tokens.
-         The /token endpoint below already supports JWT issuance.
+JWT tokens are also supported via /token (optional — gracefully degrades).
 """
 import hashlib
 import os
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, status
+from sqlalchemy.orm import Session
 
 # ── JWT (optional – gracefully degrades if python-jose not installed) ─────────
 _JWT_AVAILABLE = False
@@ -27,21 +31,21 @@ ALGORITHM = "HS256"
 TOKEN_EXPIRE_HOURS = int(os.getenv("SHADOW_TOKEN_EXPIRE_HOURS", "24"))
 
 
-# ── In-memory user store (Phase 1) ────────────────────────────────────────────
-# api_key_hash -> UserInfo
-# Hashing the key at startup means the plaintext is not kept in memory.
+# ── Key hashing utility ───────────────────────────────────────────────────────
+
 def _h(key: str) -> str:
     return hashlib.sha256(key.encode()).hexdigest()
 
 
+# ── Seed users (fallback when DB has no matching hash) ───────────────────────
+# These ship with the project for local dev / first-run convenience.
 _SEED_USERS = [
     {"api_key": "shadow_emp_101",  "user_id": "emp_101",  "org_id": "org_default", "role": "employee"},
     {"api_key": "shadow_emp_102",  "user_id": "emp_102",  "org_id": "org_default", "role": "employee"},
     {"api_key": "shadow_admin",    "user_id": "admin",    "org_id": "org_default", "role": "admin"},
-    # Add more orgs here or load from DB in Phase 2
 ]
 
-_USER_STORE: dict[str, dict] = {
+_SEED_STORE: dict[str, dict] = {
     _h(u["api_key"]): {
         "user_id": u["user_id"],
         "org_id":  u["org_id"],
@@ -51,15 +55,47 @@ _USER_STORE: dict[str, dict] = {
 }
 
 
-# ── FastAPI dependency ─────────────────────────────────────────────────────────
+# ── Core lookup (used by FastAPI dependency + tests) ──────────────────────────
 
-def authenticate(x_api_key: str = Header(...)) -> dict:
+def _lookup_user(key_hash: str, db: Optional[Session] = None) -> Optional[dict]:
     """
-    Validates the X-Api-Key header.
-    Returns a dict with keys: user_id, org_id, role
+    Resolve an API-key hash to a user dict.
+    Priority: DB user table → seed store fallback.
+    Returns None if not found or deactivated.
+    """
+    if db is not None:
+        try:
+            from db.models import User  # local import to avoid circular dependency
+            db_user = db.query(User).filter(User.api_key_hash == key_hash).first()
+            if db_user:
+                if db_user.is_active != "true":
+                    return None  # deactivated — explicitly deny
+                return {
+                    "user_id": db_user.user_id,
+                    "org_id":  db_user.org_id,
+                    "role":    db_user.role,
+                }
+        except Exception:
+            pass  # DB unavailable — fall through to seed store
+
+    return _SEED_STORE.get(key_hash)
+
+
+# ── FastAPI dependency ─────────────────────────────────────────────────────────
+# Import get_db here so FastAPI can resolve the nested dependency correctly.
+from db.database import get_db  # noqa: E402 — intentional deferred import
+
+def authenticate(
+    x_api_key: str = Header(...),
+    db: Session = Depends(get_db),
+) -> dict:
+    """
+    Validates the X-Api-Key header against the DB (then seed fallback).
+    Returns a dict with keys: user_id, org_id, role.
+    Raises 401 for unknown / deactivated keys.
     """
     key_hash = _h(x_api_key)
-    user = _USER_STORE.get(key_hash)
+    user = _lookup_user(key_hash, db)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

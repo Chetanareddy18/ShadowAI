@@ -7,7 +7,9 @@ version: "3.9"
 #    gateway   – FastAPI security gateway (port 8000)
 #    dashboard – Streamlit analytics dashboard (port 8502)
 #    chatui    – Streamlit test chat interface (port 8501)
-#    webapp    – Static premium frontend (port 8080)
+#
+#  The React portal (admin UI) and landing page are separate Vite apps —
+#  see portal/ and landing/, run independently with `npm run dev` / `npm run build`.
 #
 #  Usage:
 #    1. cp .env.example .env  (and fill in OPENAI_API_KEY etc.)
@@ -68,16 +70,6 @@ services:
       - .env
     depends_on:
       - gateway
-    restart: unless-stopped
-
-  # ── Static Web App (nginx) ────────────────────────────────────────────────────
-  webapp:
-    image: nginx:alpine
-    container_name: shadow_webapp
-    ports:
-      - "8080:80"
-    volumes:
-      - ./webapp:/usr/share/nginx/html:ro
     restart: unless-stopped
 
 volumes:

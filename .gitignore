@@ -1,15 +1,42 @@
 # Python cache
 __pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+htmlcov/
 
 # Environment variables
 .env
+.env.local
 
 # Virtual environments
 venv/
 ttenv/
+mvenv/
+.venv/
 
 # Logs / generated files
 audit_log.json
+*.log
+
+# Databases (never ship real audit data in a public repo)
+*.db
+*.sqlite3
+
+# Uploaded files
+uploads/
+
+# Node / frontend (portal + landing)
+node_modules/
+dist/
+dist-ssr/
+*.local
+.vite/
 
 # OS / editor junk
 .ipynb_checkpoints/
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea/
+Thumbs.db

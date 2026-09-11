@@ -22,11 +22,15 @@ New in Phase 3
 import csv
 import hashlib
 import io
+import json
 import os
+import asyncio
+import queue
+import threading
 from datetime import datetime
 
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -188,6 +192,25 @@ def _save_audit(
     )
     db.add(entry)
     db.commit()
+
+    # Broadcast to SSE subscribers for high-severity events
+    if decision in ("BLOCK",) or risk_level in ("CRITICAL", "HIGH"):
+        try:
+            _sse_publish({
+                "type": "threat",
+                "id": entry.id,
+                "timestamp": entry.timestamp.isoformat(),
+                "user_id": entry.user_id,
+                "org_id": entry.org_id,
+                "decision": decision,
+                "risk_level": risk_level,
+                "findings": findings,
+                "topic": extra.get("topic"),
+                "message": message,
+            })
+        except Exception:
+            pass
+
     return entry.id
 
 
@@ -620,6 +643,140 @@ def list_anomalies(
         }
         for e in events
     ]
+
+
+# ── Paginated audit log endpoint ──────────────────────────────────────────────
+
+@app.get("/admin/audit")
+def list_audit_logs(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=500),
+    decision: str | None = Query(None, description="Filter by decision: BLOCK|SANITIZE|ALLOW"),
+    risk_level: str | None = Query(None, description="Filter by risk: CRITICAL|HIGH|MEDIUM|LOW"),
+    user_id: str | None = Query(None, description="Filter by user_id"),
+    org_id: str | None = Query(None, description="Filter by org_id"),
+    topic: str | None = Query(None, description="Filter by topic"),
+    requesting_user: dict = Depends(authenticate),
+    db: Session = Depends(get_db),
+):
+    """
+    Paginated audit log browser (admin only).
+    Returns: items list + total count + pagination metadata.
+    """
+    _require_admin(requesting_user)
+    q = db.query(AuditLog)
+
+    if decision:
+        q = q.filter(AuditLog.decision == decision.upper())
+    if risk_level:
+        q = q.filter(AuditLog.risk_level == risk_level.upper())
+    if user_id:
+        q = q.filter(AuditLog.user_id == user_id)
+    if org_id:
+        q = q.filter(AuditLog.org_id == org_id)
+    if topic:
+        q = q.filter(AuditLog.topic == topic.upper())
+
+    total = q.count()
+    offset = (page - 1) * page_size
+    rows = q.order_by(AuditLog.timestamp.desc()).offset(offset).limit(page_size).all()
+
+    return {
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": max(1, (total + page_size - 1) // page_size),
+        "items": [
+            {
+                "id": r.id,
+                "timestamp": str(r.timestamp),
+                "user_id": r.user_id,
+                "org_id": r.org_id,
+                "decision": r.decision,
+                "risk_level": r.risk_level,
+                "findings": r.findings,
+                "topic": r.topic,
+                "topic_risk_multiplier": r.topic_risk_multiplier,
+                "response_risk_level": r.response_risk_level,
+                "response_decision": r.response_decision,
+                "semantic_injection_score": r.semantic_injection_score,
+                "is_anomalous": r.is_anomalous,
+                "prompt_length": r.prompt_length,
+                "model_used": r.model_used,
+                "message": r.message,
+            }
+            for r in rows
+        ],
+    }
+
+
+# ── SSE real-time threat feed ─────────────────────────────────────────────────
+# A lightweight in-process broadcast bus. Each SSE subscriber gets its own
+# queue; _sse_publish() is called from _save_audit() for BLOCK/HIGH events.
+
+_sse_subscribers: list[queue.Queue] = []
+_sse_lock = threading.Lock()
+
+
+def _sse_publish(event: dict) -> None:
+    """Publish a threat event to all active SSE subscribers."""
+    payload = json.dumps(event)
+    with _sse_lock:
+        dead = []
+        for q in _sse_subscribers:
+            try:
+                q.put_nowait(payload)
+            except queue.Full:
+                dead.append(q)
+        for q in dead:
+            _sse_subscribers.remove(q)
+
+
+@app.get("/admin/events/stream")
+async def threat_stream(
+    request: Request,
+    x_api_key: str = Query(..., description="Admin API key for SSE auth"),
+    db: Session = Depends(get_db),
+):
+    """
+    Server-Sent Events stream of real-time threat events (admin only).
+    Connect with: EventSource('/admin/events/stream?x_api_key=<key>')
+    """
+    from auth import _h, _lookup_user
+    user = _lookup_user(_h(x_api_key), db)
+    if not user or user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required.")
+
+    client_queue: queue.Queue = queue.Queue(maxsize=100)
+    with _sse_lock:
+        _sse_subscribers.append(client_queue)
+
+    async def event_generator():
+        try:
+            yield "data: {\"type\":\"connected\",\"message\":\"Threat stream active\"}\n\n"
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    payload = client_queue.get_nowait()
+                    yield f"data: {payload}\n\n"
+                except queue.Empty:
+                    # keepalive ping every 15 s
+                    yield ": keepalive\n\n"
+                    await asyncio.sleep(15)
+        finally:
+            with _sse_lock:
+                if client_queue in _sse_subscribers:
+                    _sse_subscribers.remove(client_queue)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 # ── Helper ────────────────────────────────────────────────────────────────────

@@ -3,9 +3,22 @@
 [![CI](https://github.com/Chetanareddy18/ShadowAI/actions/workflows/ci.yml/badge.svg)](https://github.com/Chetanareddy18/ShadowAI/actions)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.111%2B-009688?logo=fastapi)](https://fastapi.tiangolo.com/)
+[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript)](https://www.typescriptlang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-> **Shadow AI** is a production-grade AI security gateway that sits between your users and any LLM. It intercepts every prompt, scans it for threats, enforces per-organisation policies, and audits every interaction — in real time.
+> **Shadow AI** is a full-stack AI security gateway that sits between users and any LLM. It intercepts every prompt, detects injection attacks, scans for PII/secrets, enforces per-organisation policies, and gives admins a real-time control-plane to monitor everything — a Python/FastAPI security engine, a live-monitoring React admin portal, and a marketing landing page, all in one repo.
+
+---
+
+## 🧩 What's in this repo
+
+| Part | Path | Stack | What it does |
+|---|---|---|---|
+| **Gateway (API)** | [`gateway.py`](gateway.py) | FastAPI + SQLAlchemy + scikit-learn | The security brain — auth, rate limiting, injection/PII detection, policy engine, LLM call, audit logging |
+| **Admin Portal** | [`portal/`](portal/) | React 19 + TypeScript + Vite + Zustand | Live dashboard, real-time threat feed (SSE), user/org management, audit log explorer, prompt studio |
+| **Landing Page** | [`landing/`](landing/) | React 19 + TypeScript + Three.js + Framer Motion | Public-facing marketing site with a 3D hero, animated security pipeline, dark/light theme |
+| **Legacy Streamlit tools** | [`dashboard.py`](dashboard.py), [`chat_ui.py`](chat_ui.py) | Streamlit | Optional lightweight analytics dashboard + test chat client (kept for quick local demos) |
 
 ---
 
@@ -25,7 +38,7 @@
 | **Anomaly Detection** | IsolationForest per-user behavioural baseline (statistical fallback) |
 | **Audit Log** | SQLite (dev) / PostgreSQL (prod) — every request persisted |
 | **Alerting** | Slack webhook + SMTP email on configurable risk levels |
-| **Dashboard** | 6-tab Streamlit analytics: Overview, Threat Feed, Topics, User Behaviour, Time-Series, Org Comparison |
+| **Live Admin Portal** | React SPA — SSE threat feed, KPI dashboard, user/org CRUD, CSV export, prompt studio |
 | **Metrics** | Prometheus `/metrics` endpoint (optional) |
 | **Admin API** | User CRUD, Org CRUD, Policy management, CSV export |
 
@@ -34,32 +47,34 @@
 ## 🏗️ Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                         Client (API Consumer)                   │
-└────────────────────────────┬────────────────────────────────────┘
-                             │  POST /process_prompt
-                             ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                      Shadow AI Gateway                          │
-│                                                                 │
-│  1. Auth (API Key / JWT)                                        │
-│  2. Rate Limit (DB-backed sliding window)                       │
-│  3. Regex Injection Detection  ──────────────────► BLOCK        │
-│  4. Semantic Injection (TF-IDF + LogReg)  ──────► BLOCK        │
-│  5. PII / Secret Scan                                           │
-│  6. Topic Classification  (risk multiplier)                     │
-│  7. Risk Score + Policy Decision  ──────────────► BLOCK        │
-│  8. Sanitize (redact PII if SANITIZE)                          │
-│  9. LLM Call (OpenAI / mock)                                   │
-│ 10. Response Scan  ─────────────────────────────► REDACT/BLOCK │
-│ 11. Anomaly Detection (IsolationForest)                        │
-│ 12. Audit Log (SQLite / PostgreSQL)                            │
-│ 13. Alert (Slack / Email on CRITICAL)                          │
-└──────────────┬──────────────────────────┬──────────────────────┘
-               │                          │
-               ▼                          ▼
-         LLM Response             Streamlit Dashboard
-         (to client)              (analytics + admin)
+┌───────────────┐        ┌──────────────────────┐
+│  Landing Page │        │     Admin Portal     │
+│  (React + 3D) │        │  (React + TS + SSE)  │
+└───────┬───────┘        └──────────┬───────────┘
+        │                           │  fetch / EventSource
+        │                           ▼
+        │              ┌─────────────────────────────────────────┐
+        │              │           Shadow AI Gateway             │
+        └─────────────►│                                         │
+       "Open Portal"   │  1. Auth (API Key / JWT)                │
+                        │  2. Rate Limit (DB-backed)              │
+                        │  3. Regex Injection Detection  ─► BLOCK │
+                        │  4. Semantic Injection (TF-IDF+LogReg)  │
+                        │  5. PII / Secret Scan                   │
+                        │  6. Topic Classification (risk mult.)   │
+                        │  7. Risk Score + Policy Decision        │
+                        │  8. Sanitize (redact PII if SANITIZE)   │
+                        │  9. LLM Call (OpenAI / mock)            │
+                        │ 10. Response Scan  ─► REDACT / BLOCK    │
+                        │ 11. Anomaly Detection (IsolationForest) │
+                        │ 12. Audit Log (SQLite / PostgreSQL)     │
+                        │ 13. Alert (Slack / Email on CRITICAL)   │
+                        └───────────────┬─────────────────────────┘
+                                        │
+                          ┌─────────────┴─────────────┐
+                          ▼                           ▼
+                    LLM Response              Portal Dashboard / SSE
+                    (to client)                (live analytics + admin)
 ```
 
 ---
@@ -69,40 +84,62 @@
 ### Prerequisites
 
 - Python 3.11+
+- Node.js 18+ (for `portal/` and `landing/`)
 - (Optional) Docker & Docker Compose
 
-### Local Setup
+### 1. Clone & configure
 
 ```bash
-# 1. Clone the repository
 git clone https://github.com/Chetanareddy18/ShadowAI.git
 cd ShadowAI
-
-# 2. Create and activate a virtual environment
-python -m venv venv
-source venv/bin/activate     # Windows: venv\Scripts\activate
-
-# 3. Install dependencies
-pip install -r requirements.txt
-
-# 4. Configure environment (copy and edit)
 cp .env.example .env
-# Set OPENAI_API_KEY, SHADOW_JWT_SECRET, etc.
-
-# 5. Run the gateway
-uvicorn gateway:app --reload --port 8000
-
-# 6. (Optional) Run the dashboard
-streamlit run dashboard.py
+# edit .env → set OPENAI_API_KEY, SHADOW_JWT_SECRET, etc. (optional — mock LLM works out of the box)
 ```
 
-### Docker Compose
+### 2. Run everything at once (Windows)
+
+```powershell
+.\start-all.ps1
+```
+
+This installs dependencies and opens the gateway, portal, and landing page each in their own terminal window.
+
+### 3. …or run each piece manually
+
+```bash
+# Backend — FastAPI gateway
+python -m venv venv && source venv/bin/activate   # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+uvicorn gateway:app --reload --port 8000
+
+# Admin portal (new terminal)
+cd portal
+npm install
+npm run dev          # → http://localhost:5173
+
+# Landing page (new terminal)
+cd landing
+npm install
+npm run dev          # → http://localhost:5175
+```
+
+| Service | URL | Notes |
+|---|---|---|
+| Gateway API | http://localhost:8000 | `/docs` for interactive Swagger UI |
+| Admin Portal | http://localhost:5173 | Login with a seed API key (see below) |
+| Landing Page | http://localhost:5175 | Public marketing site |
+
+**Demo API keys** (created automatically on first run, dev/demo only — rotate before any real deployment):
+`shadow_admin` (admin role), `shadow_emp_101`, `shadow_emp_102` (employee role)
+
+### Docker Compose (backend + Streamlit tools)
 
 ```bash
 docker-compose up --build
 ```
 
-The gateway will be available at `http://localhost:8000` and the dashboard at `http://localhost:8501`.
+Gateway → `http://localhost:8000` · Dashboard → `http://localhost:8502` · Chat UI → `http://localhost:8501`
+(`portal/` and `landing/` are Vite apps, run/deployed separately — see their own `package.json`.)
 
 ---
 
@@ -176,14 +213,13 @@ X-Api-Key: shadow_emp_101
 ## 🧪 Testing
 
 ```bash
-# Run all unit tests
+# Backend
 pytest tests/ -v
-
-# Run with coverage
 pytest tests/ --cov=. --cov-report=term-missing
 
-# Run just gateway integration tests
-pytest tests/test_gateway.py -v
+# Portal / Landing
+cd portal && npm run build   # type-checks + production build
+cd landing && npm run build
 ```
 
 ---
@@ -196,20 +232,26 @@ pytest tests/test_gateway.py -v
 - **Semantic injection** defeats paraphrased attacks that bypass simple regex
 - **Anomaly detection** catches insider threats and compromised accounts via behavioural baselining
 - **Per-org policies** enable multi-tenant isolation
+- **Secrets stay out of git**: `.env`, `*.db` and audit logs are gitignored — only `.env.example` is committed
 - OWASP Top 10 mitigations applied throughout
 
 ---
 
-## 📊 Dashboard Tabs
+## 🛠️ Tech Stack
 
-| Tab | What You See |
+| Layer | Technology |
 |---|---|
-| 📊 Overview | KPIs, exec impact, decision/risk/semantic score charts |
-| 🚨 Threat Feed | Live blocked events, anomaly events, top blocked users |
-| 🏷️ Topics | Domain distribution, block rate by topic, risk multiplier heatmap |
-| 👤 User Behaviour | Per-user risk scores, anomaly timeline, request heatmap |
-| 📈 Time-Series | Daily trends, hourly heatmap, 7-day rolling block rate |
-| 🏢 Org Comparison | Multi-org scorecards, volume/block rate, topic mix |
+| API Gateway | FastAPI + Uvicorn |
+| Database | SQLAlchemy 2 · SQLite (dev) · PostgreSQL (prod) |
+| ML | scikit-learn (TF-IDF, IsolationForest, LogisticRegression) |
+| LLM | OpenAI API (gpt-4o-mini default) |
+| Admin Portal | React 19 · TypeScript · Vite · Zustand · Recharts · Framer Motion |
+| Landing Page | React 19 · TypeScript · Three.js (`@react-three/fiber`) · Framer Motion · Tailwind CSS v4 |
+| Legacy dashboard | Streamlit + Plotly |
+| Auth | SHA-256 API keys + python-jose JWT |
+| Testing | pytest + FastAPI TestClient |
+| CI/CD | GitHub Actions |
+| Containerisation | Docker + Docker Compose |
 
 ---
 
@@ -218,34 +260,18 @@ pytest tests/test_gateway.py -v
 - [x] **Phase 1** — Core gateway: auth, rate limiting, PII scan, policy engine, LLM call, audit log
 - [x] **Phase 2** — Dashboard, alerting, JWT auth, CSV export, per-org policies
 - [x] **Phase 3** — Semantic injection (ML), response scanner, topic classifier, anomaly detection, user/org admin API, Prometheus metrics
-- [ ] **Phase 4** — PostgreSQL migration, Redis rate limiting, RBAC, multi-modal scanning, SOC 2 compliance mode
-
----
-
-## 🛠️ Tech Stack
-
-| Component | Technology |
-|---|---|
-| API Gateway | FastAPI + Uvicorn |
-| Database | SQLAlchemy 2 · SQLite (dev) · PostgreSQL (prod) |
-| ML | scikit-learn (TF-IDF, IsolationForest, LogisticRegression) |
-| LLM | OpenAI API (gpt-4o-mini default) |
-| Dashboard | Streamlit + Plotly |
-| Auth | SHA-256 API keys + python-jose JWT |
-| Testing | pytest + FastAPI TestClient |
-| CI/CD | GitHub Actions |
-| Containerisation | Docker + Docker Compose |
+- [x] **Phase 4** — React admin portal (live SSE threat feed, dashboard, prompt studio) + 3D landing page
+- [ ] **Phase 5** — PostgreSQL migration, Redis rate limiting, RBAC, multi-modal scanning, SOC 2 compliance mode
 
 ---
 
 ## 👩‍💻 Author
 
-**Palla Chetana Reddy**  
-Founder & CEO, [Oronzo](https://oronzo.in) · AI/ML Research Intern, Apollo Hospitals · Gold Medalist, B.Tech CSE  
-[LinkedIn](https://linkedin.com/in/palla-chetana-reddy/) · [GitHub](https://github.com/Chetanareddy18)
+**Palla Chetana Reddy**
 
 ---
 
 ## 📄 License
 
 MIT — see [LICENSE](LICENSE) for details.
+

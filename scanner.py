@@ -10,8 +10,8 @@ def scan_sensitive_data(text):
         findings["EMAIL"] = emails
 
     # ---------------- PHONE ----------------
-    phone_pattern = r"\b\d{10}\b"
-    phones = re.findall(phone_pattern, text)
+    phone_pattern = r"(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b"
+    phones = [p for p in re.findall(phone_pattern, text) if len(re.sub(r'\D', '', p)) >= 10]
     if phones:
         findings["PHONE"] = phones
 
@@ -34,7 +34,7 @@ def scan_sensitive_data(text):
 
     # ---------------- DATABASE URLs ----------------
     db_urls = re.findall(
-        r"(?:postgresql|mysql|mongodb|redis):\/\/[^\s]+",
+        r"(?:postgresql|postgres|mysql|mongodb|redis):\/\/[^\s]+",
         text,
         flags=re.IGNORECASE
     )

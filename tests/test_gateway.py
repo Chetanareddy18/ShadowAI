@@ -10,6 +10,9 @@ os.environ.setdefault("SHADOW_DB_URL", "sqlite:///./test_shadow.db")
 os.environ.setdefault("SHADOW_LOG_RAW_PROMPTS", "false")
 
 from gateway import app
+from db.database import init_db
+
+init_db()  # ensure tables exist even if the startup event doesn't fire under TestClient
 
 client = TestClient(app)
 
