@@ -1,8 +1,8 @@
 """Tests for injection_detector.py – regex-based injection detection."""
-import sys, os
+import sys
+import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-import pytest
 from injection_detector import detect_prompt_injection
 
 

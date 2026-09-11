@@ -13,7 +13,6 @@ import smtplib
 import ssl
 from datetime import datetime, timezone
 from email.mime.text import MIMEText
-from typing import Optional
 
 
 def send_alert(risk_level: str, user_id: str, findings: dict) -> None:

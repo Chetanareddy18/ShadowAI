@@ -32,7 +32,7 @@ Training strategy
 from __future__ import annotations
 
 import math
-from collections import defaultdict, deque
+from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import TypedDict
 

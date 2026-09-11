@@ -80,7 +80,7 @@ if prompt:
 
 **Risk Level:** {result.get('risk_level')}
 
-Sensitive information detected.  
+Sensitive information detected.
 The Shadow AI Gateway blocked this request.
 """
 

@@ -30,7 +30,7 @@ import threading
 from datetime import datetime
 
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, HTTPException, Query, Request, status
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -39,7 +39,7 @@ from sqlalchemy.orm import Session
 # Load .env file if present
 load_dotenv()
 
-from auth import authenticate, create_access_token, _h as _hash_key
+from auth import authenticate, _h as _hash_key
 from db.database import get_db, init_db
 from db.models import AnomalyEvent, AuditLog, Organisation, User
 from injection_detector import detect_prompt_injection

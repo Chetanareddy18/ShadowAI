@@ -1,8 +1,8 @@
 """Integration tests for gateway.py using FastAPI TestClient."""
-import sys, os
+import sys
+import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-import pytest
 from fastapi.testclient import TestClient
 
 # Set a test DB so we don't touch production

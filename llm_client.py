@@ -37,7 +37,7 @@ def _call_openai(prompt: str, model: str | None, api_key: str) -> str:
             temperature=0.7,
         )
         return response.choices[0].message.content or ""
-    except Exception as exc:  # network error, quota, etc.
+    except Exception:  # network error, quota, etc.
         return f"[OpenAI error – falling back to mock] {_mock_response(prompt)}"
 
 
